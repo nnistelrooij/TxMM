@@ -37,7 +37,7 @@ if __name__ == '__main__':
     comments = comments.assign(text=comments['text'].str.replace('\"', '\\\"'))
 
     num_comments = int(sys.argv[1]) if len(sys.argv) == 2 else comments.shape[0]
-    command_comments = comments[range(num_comments)]
+    command_comments = comments.iloc[range(num_comments)]
 
     command_comments['sentiment'] = get_sentiment(command_comments['text'])
     command_comments.to_csv('output.csv', index=False)
