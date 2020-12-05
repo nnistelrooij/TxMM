@@ -10,11 +10,11 @@ import pandas as pd
 def get_sentiment(comments):
     if os.path.exists('input.txt'): os.remove('input.txt')
     with open('input.txt', 'a') as text_file:
-        print('{\n  "text": [', file=text_file)
+        print('{ "text": [', file=text_file, end='')
         for comment in comments.iloc[:-1]:
-            print(f'    "{comment}",', file=text_file)
-        print(f'    "{comments.iloc[-1]}"', file=text_file)
-        print('  ]\n}', file=text_file)
+            print(f' "{comment}",', file=text_file, end='')
+        print(f' "{comments.iloc[-1]}"', file=text_file, end='')
+        print(' ] }', file=text_file)
 
     x = subprocess.Popen(
         ['curl',
