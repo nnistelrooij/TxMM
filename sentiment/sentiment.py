@@ -14,7 +14,7 @@ def get_sentiment(comments):
         for comment in comments.iloc[:-1]:
             print(f' "{comment}",', file=text_file, end='')
         print(f' "{comments.iloc[-1]}"', file=text_file, end='')
-        print(' ] }', file=text_file)
+        print(' ] }', file=text_file, end='')
 
     x = subprocess.Popen(
         ['curl',
