@@ -118,6 +118,10 @@ def remove_dirt(comments):
     comments = comments[comments['text'].str.match(clean_regex)]
     comments = comments[~comments['text'].str.match('[^a-z]+$')]
 
+    # replace tabs with 8 spaces and escape all quotation marks
+    comments = comments.assign(text=comments['text'].str.replace('\t', ' '*8))
+    comments = comments.assign(text=comments['text'].str.replace('\"', '\\\"'))
+
     return comments
 
 

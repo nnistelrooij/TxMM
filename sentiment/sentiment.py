@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import sys
 import subprocess
 
@@ -16,13 +15,14 @@ def get_sentiment(comments):
         print(f' "{comments.iloc[-1]}"', file=text_file, end='')
         print(' ] }', file=text_file, end='')
 
-    x = subprocess.Popen(
-        ['curl',
-         '-X', 'POST',
-         'http://localhost:5000/model/predict',
-         '-H', 'accept: application/json',
-         '-H', 'Content-Type: application/json',
-         '-d', '@input.txt'],
+    x = subprocess.Popen([
+            'curl',
+            '-X', 'POST',
+            'http://localhost:5000/model/predict',
+            '-H', 'accept: application/json',
+            '-H', 'Content-Type: application/json',
+            '-d', '@input.txt',
+        ],
         shell=True,
         stdout=subprocess.PIPE,
     )
@@ -39,5 +39,6 @@ if __name__ == '__main__':
     num_comments = int(sys.argv[1]) if len(sys.argv) == 2 else comments.shape[0]
     command_comments = comments.iloc[range(num_comments)]
 
-    command_comments['sentiment'] = get_sentiment(command_comments['text'])
+    predictions = get_sentiment(command_comments['text'])
+    command_comments = command_comments.assign(sentiment=predictions)
     command_comments.to_csv('output.csv', index=False)
