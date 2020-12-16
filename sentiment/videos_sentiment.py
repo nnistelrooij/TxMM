@@ -17,8 +17,6 @@ def sentiment_prior_beta_abs(videos_df):
     videos_df['a'] = like_proportions * feedback_weight + 1
     videos_df['b'] = dislike_proportions * feedback_weight + 1
 
-    return videos_df
-
 
 def log_continuous_bernoulli(sentiments, lambdas):
     point5_index = np.argmax(lambdas == 0.5)
@@ -62,38 +60,32 @@ def sentiment_maps(lambdas, log_posteriors):
 def sentiment_means(lambdas, log_posteriors):
     # compute normalized posteriors
     posteriors = np.exp(log_posteriors)
+    bad_idx = [1286, 1293]
+    posteriors[bad_idx] = np.exp(log_posteriors[bad_idx] - [[24], [1569]])
     posteriors = posteriors / np.sum(posteriors, axis=1, keepdims=True)
 
     # compute mean posterior lambda
     means = np.sum(lambdas * posteriors, axis=1)
-
-    # determine mean instead of NaN numbers
-    posterior_1286 = np.exp(log_posteriors[1286] - 24)
-    posterior_1286 = posterior_1286 / np.sum(posterior_1286)
-    means[1286] = np.sum(lambdas * posterior_1286)
-
-    posterior_1293 = np.exp(log_posteriors[1293] - 1569)
-    posterior_1293 = posterior_1293 / np.sum(posterior_1293)
-    means[1293] = np.sum(lambdas * posterior_1293)
 
     return means
 
 
 if __name__ == '__main__':
     videos_df = pd.read_csv('../clean/clean_videos.csv')
-    videos_df = sentiment_prior_beta_abs(videos_df)
+    sentiment_prior_beta_abs(videos_df)
 
     comments_df = pd.read_csv('sentiment_comments.csv')
     lambdas = np.linspace(0.0001, 0.9999, 9999)
     log_posteriors = sentiment_log_posteriors(videos_df, comments_df, lambdas)
 
-    videos_df = videos_df.assign(MAP=sentiment_maps(lambdas, log_posteriors))
-    videos_df = videos_df.assign(mean=sentiment_means(lambdas, log_posteriors))
+    videos_df['MAP'] = sentiment_maps(lambdas, log_posteriors)
+    videos_df['mean'] = sentiment_means(lambdas, log_posteriors)
     videos_df.to_csv('sentiment_videos.csv', index=False)
 
+    # plot distribution of sentiments over videos
     _, axs = plt.subplots(1, 2, figsize=(10, 5))
-    axs[0].hist(videos_df['mean'], bins=100)
-    axs[0].set_title('Means')
-    axs[1].hist(videos_df['MAP'], bins=100)
-    axs[1].set_title('MAPs')
+    axs[0].hist(videos_df['MAP'], bins=100)
+    axs[0].set_title('MAPs')
+    axs[1].hist(videos_df['mean'], bins=100)
+    axs[1].set_title('Means')
     plt.show()

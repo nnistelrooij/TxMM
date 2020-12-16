@@ -1,3 +1,5 @@
+import re
+
 import pandas as pd
 
 
@@ -10,121 +12,121 @@ def remove_replies_channel_comments(comments):
     return comments
 
 
-def replace_diacritics_tags(comments):
-    text = comments['text'].str.replace('á', 'a')
+def replace_diacritics_html_repeats(comments):
+    # get texts from comments DataFrame
+    text = comments['text']
+
+    # replace most common diacritics
+    text = text.str.replace('á', 'a')
     text = text.str.replace('É', 'E')
     text = text.str.replace('é', 'e')
     text = text.str.replace('ö', 'o')
 
+    # replace HTML character codes
     text = text.str.replace('&amp;', '&')
     text = text.str.replace('&#39;', '\'')
-    text = text.str.replace('(.|\s)\\1{3,}', '\\1\\1\\1')
+    text = text.str.replace('&quot;', '"')
 
-    regex = '(^|(?<=\s)){}((?=\s)|$)'
-    text = text.str.replace(regex.format('TIMECODE'), 'timecode')
-    text = text.str.replace(regex.format('LINK'), 'link')
-    text = text.str.replace(regex.format('HASHTAG'), 'hashtag')
-    text = text.str.replace(regex.format('EMOTICON'), 'emoticon')
-    text = text.str.replace(regex.format('USERHANDLE'), 'userhandle')
+    # replace long sequences of equal characters
+    text = text.str.replace(r'(.|\s)\1{3,}', r'\1\1\1')
 
-    comments = comments.assign(text=text)
-    return comments
+    # put new texts in comments DataFrame
+    comments.loc[:, 'text'] = text
+
+
+def replace(comments, regex, repl, flags=0):
+    col = repl.lower()
+    comments[col] = 0
+    for i, comment in comments.iterrows():
+        text, count = re.subn(regex, repl, comment['text'], flags=flags)
+        comments.loc[i, 'text'], comments.loc[i, col] = text, count
 
 
 def replace_timecodes(comments):
     regex = (
-        '((@|~|#) ?)?'  # optional @, ~, or # at the start
-        '(([0-9](:|h))?[0-9]{1,2}(:|m)[0-9]{2}s?\s?-\s?)?'  # optional t range
-        '([0-9](:|h))?[0-9]{1,2}(:|m)[0-9]{2}s?'  # time code with : or h m s
-        '(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
+        r'((@|~|#) ?)?'  # optional @, ~, or # at the start
+        r'(([0-9](:|h))?[0-9]{1,2}(:|m)[0-9]{2}s?\s?-\s?)?'  # optional t range
+        r'([0-9](:|h))?[0-9]{1,2}(:|m)[0-9]{2}s?'  # time code with : or h m s
+        r'(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
     )
-    timecodes = comments['text'].str.replace(regex, 'TIMECODE')
-    comments = comments.assign(text=timecodes)
-    comments['timecode'] = comments['text'].str.match('.*TIMECODE.*')
+    replace(comments, regex, 'TIMECODE')
     print(f'We have replaced {sum(comments["timecode"])} time codes.')
-
-    return comments
 
 
 def replace_links(comments):
     regex = (
-        '(https?:\/\/|ftp:\/\/|https?:\/\/www\.|www\.)'  # starts with protocol
-        '([A-Za-z0-9\-]{1,}\.){1,5}'  # website domain
-        '[a-z]{1,4}'  # top-level domain
-        '\/?(([\.\/]?[A-za-z0-9\/%<>\-_@~#:\+&=\?])+)?'  # optional page or file
+        r'(https?://|ftp://|https?://www\.|www\.)'  # starts with protocol
+        r'([A-Za-z0-9\-]+\.){1,5}'  # website domain
+        r'[a-z]{1,4}'  # top-level domain
+        r'/?(([\./]?[A-za-z0-9/%<>\-_@~#:\+&\=\?])+)?'  # optional page or file
     )
-    links = comments['text'].str.replace(regex, 'LINK')
-    comments = comments.assign(text=links)
-    comments['link'] = comments['text'].str.match('.*LINK.*')
-    print(f'We have found {sum(comments["link"])} links.')
+    replace(comments, regex, 'LINK')
+    print(f'We have replaced {sum(comments["link"])} links.')
 
-    return comments
+
+def replace_emails(comments):
+    regex = (
+        r'(^|(?<=\s))'  # start with SOF or ws
+        r'[A-Za-z0-9\-\.]+'  # user name
+        r'@([A-Za-z0-9\-]+\.){1,5}'  # email domain
+        r'[a-z]{1,4}'  # top-level domain
+        r'(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
+    )
+    replace(comments, regex, 'EMAIL')
+    print(f'We have replaced {sum(comments["email"])} e-mails.')
 
 
 def replace_hashtags(comments):
     regex = (
-        '(^|(?<=\s))'  # start with SOF or ws
-        '#[A-Za-z][A-Za-z0-9\!]+'  # hashtag
-        '(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
+        r'(^|(?<=\s))'  # start with SOF or ws
+        r'#[A-Za-z][A-Za-z0-9\!]+'  # hashtag
+        r'(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
     )
-    hashtags = comments['text'].str.replace(regex, 'HASHTAG')
-    comments = comments.assign(text=hashtags)
-    comments['hashtag'] = comments['text'].str.match('.*HASHTAG.*')
-    print(f'We have found {sum(comments["hashtag"])} hashtags.')
-
-    return comments
+    replace(comments, regex, 'HASHTAG')
+    print(f'We have replaced {sum(comments["hashtag"])} hashtags.')
 
 
 def replace_emoticons(comments):
     regex = (
-        '(^|(?<=\s))'  # start with SOF or ws
-        '(\:\w+\:|'  # emojis, such as :smile:
-        '\<[\/\\]?3|'  # (broken) heart
-        '[\(\)\\\D|\*\$][\-\^]?[\:\;\=]|'  # smileys
-        '[\:\;\=B8x][\-\^]?[3DOPp\@\$\*\\\)\(\/\|]|'  # more smileys
-        '\^\^|xd|:(v){1,3}|:0)'  # ^^ or xd or :v or :0
-        '(?=\s|[\!\.\?]|$)'  # end with EOF or ws
+        r'(^|(?<=\s))'  # start with SOF or ws
+        r'(:\w+:|'  # emojis, such as :smile:
+        r'<[/\\]?3|'  # (broken) heart
+        r'[\(\)\\\D|\*\$][\-\^]?[:;\=]|'  # smileys
+        r'[:;\=B8x][\-\^]?[3DOPp@\$\*\\\)\(/\|]|'  # more smileys
+        r'\^\^|xd|:(v){1,3}|:0)'  # ^^ or xd or :v or :0
+        r'(?=\s|[\!\.\?]|$)'  # end with EOF or ws
     )
-    emoticons = comments['text'].str.replace(regex, 'EMOTICON')
-    comments = comments.assign(text=emoticons)
-    comments['emoticon'] = comments['text'].str.match('.*EMOTICON.*')
-    print(f'We have found {sum(comments["emoticon"])} emoticons.')
-
-    return comments
+    replace(comments, regex, 'EMOTICON')
+    print(f'We have replaced {sum(comments["emoticon"])} emoticons.')
 
 
 def replace_userhandles(comments):
     regex = (
-        '(^|(?<=\s))'  # start with BOF or ws
-        '@(bprp|Flammable Maths|Stand-up Maths|Standup Maths|PBS|'
-        'PBS Infinite Series|Think Twice|Tipping Point Math|3B1B|'
-        '[a-z0-9]{5,})'  # multitoken handle or generic handle
+        r'(^|(?<=\s))'  # start with BOF or ws
+        r'@(bprp|Flammable Maths|Stand-up Maths|Standup Maths|PBS|'
+        r'PBS Infinite Series|Think Twice|Tipping Point Math|3B1B|'
+        r'[a-z0-9]{5,})'  # multitoken handle or generic handle
     )
-    user_handles = comments['text'].str.replace(regex, 'USERHANDLE', case=False)
-    comments = comments.assign(text=user_handles)
-    comments['user'] = comments['text'].str.match('.*USERHANDLE.*')
-    print(f'We have found {sum(comments["user"])} user handles.')
-
-    return comments
+    replace(comments, regex, 'USERHANDLE', flags=re.IGNORECASE)
+    print(f'We have replaced {sum(comments["userhandle"])} user handles.')
 
 
 def remove_dirt(comments):
     # remove comments with only replacements
-    tag_regex = '(\s*(TIMECODE|LINK|HASHTAG|EMOTICON|USERHANDLE))+\s*$'
+    tag_regex = '(\s*(TIMECODE|LINK|EMAIL|HASHTAG|EMOTICON|USERHANDLE))+\s*$'
     comments = comments[~comments['text'].str.match(tag_regex)]
 
     # remove comments with 3 or fewer characters
-    comments = comments.assign(textlen=comments['text'].str.len())
-    comments = comments[comments['textlen'] >= 4]
+    comments = comments[comments['text'].str.len() >= 4]
 
     # remove comments with non-ASCII characters or not one lowercase character
-    clean_regex = '[A-Za-z0-9\/\?\.,;:\-\(\)&%\$\!"\' \n\t]+$'
+    clean_regex = '[A-Za-z0-9/\?\.,;:\-\(\)&%\$\!"\' \n\t]+$'
     comments = comments[comments['text'].str.match(clean_regex)]
     comments = comments[~comments['text'].str.match('[^a-z]+$')]
 
     # replace tabs with 8 spaces and escape all quotation marks
     comments = comments.assign(text=comments['text'].str.replace('\t', ' '*8))
-    comments = comments.assign(text=comments['text'].str.replace('\"', '\\\"'))
+    comments = comments.assign(text=comments['text'].str.replace(r'"', r'\"'))
 
     return comments
 
@@ -132,12 +134,13 @@ def remove_dirt(comments):
 if __name__ == '__main__':
     comments = pd.read_csv('../data/comments.csv')
     comments = remove_replies_channel_comments(comments)
-    comments = replace_diacritics_tags(comments)
-    comments = replace_timecodes(comments)
-    comments = replace_links(comments)
-    comments = replace_hashtags(comments)
-    comments = replace_emoticons(comments)
-    comments = replace_userhandles(comments)
+    replace_diacritics_html_repeats(comments)
+    replace_timecodes(comments)
+    replace_links(comments)
+    replace_emails(comments)
+    replace_hashtags(comments)
+    replace_emoticons(comments)
+    replace_userhandles(comments)
     comments = remove_dirt(comments)
 
     print(f'Final number of comments: {comments.shape[0]}')

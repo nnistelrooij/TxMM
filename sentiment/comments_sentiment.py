@@ -35,6 +35,5 @@ def get_sentiment(comments):
 if __name__ == '__main__':
     comments = pd.read_csv('../clean/clean_comments.csv')
 
-    predictions = get_sentiment(comments['text'])
-    comments = comments.assign(sentiment=predictions)
+    comments['sentiment'] = get_sentiment(comments['text'])
     comments.to_csv('sentiment_comments.csv', index=False)
