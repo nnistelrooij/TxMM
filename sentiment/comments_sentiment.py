@@ -1,20 +1,20 @@
 import json
 import os
-import sys
 import subprocess
 
 import pandas as pd
 
 
 def get_sentiment(comments):
+    # write input to MAX sentiment classifier in input.txt
     if os.path.exists('input.txt'): os.remove('input.txt')
     with open('input.txt', 'a') as text_file:
         print('{ "text": [', file=text_file, end='')
         for comment in comments.iloc[:-1]:
             print(f' "{comment}",', file=text_file, end='')
-        print(f' "{comments.iloc[-1]}"', file=text_file, end='')
-        print(' ] }', file=text_file, end='')
+        print(f' "{comments.iloc[-1]}" ] }}', file=text_file, end='')
 
+    # run MAX sentiment classifier on stored input.txt file
     x = subprocess.Popen([
             'curl',
             '-X', 'POST',
@@ -34,11 +34,7 @@ def get_sentiment(comments):
 
 if __name__ == '__main__':
     comments = pd.read_csv('../clean/clean_comments.csv')
-    comments = comments.assign(text=comments['text'].str.replace('\"', '\\\"'))
 
-    num_comments = int(sys.argv[1]) if len(sys.argv) == 2 else comments.shape[0]
-    command_comments = comments.iloc[range(num_comments)]
-
-    predictions = get_sentiment(command_comments['text'])
-    command_comments = command_comments.assign(sentiment=predictions)
-    command_comments.to_csv('output.csv', index=False)
+    predictions = get_sentiment(comments['text'])
+    comments = comments.assign(sentiment=predictions)
+    comments.to_csv('sentiment_comments.csv', index=False)

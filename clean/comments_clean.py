@@ -16,6 +16,10 @@ def replace_diacritics_tags(comments):
     text = text.str.replace('é', 'e')
     text = text.str.replace('ö', 'o')
 
+    text = text.str.replace('&amp;', '&')
+    text = text.str.replace('&#39;', '\'')
+    text = text.str.replace('(.|\s)\\1{3,}', '\\1\\1\\1')
+
     regex = '(^|(?<=\s)){}((?=\s)|$)'
     text = text.str.replace(regex.format('TIMECODE'), 'timecode')
     text = text.str.replace(regex.format('LINK'), 'link')
@@ -45,7 +49,7 @@ def replace_timecodes(comments):
 def replace_links(comments):
     regex = (
         '(https?:\/\/|ftp:\/\/|https?:\/\/www\.|www\.)'  # starts with protocol
-        '([a-z0-9\-]{1,}\.){1,5}'  # website domain
+        '([A-Za-z0-9\-]{1,}\.){1,5}'  # website domain
         '[a-z]{1,4}'  # top-level domain
         '\/?(([\.\/]?[A-za-z0-9\/%<>\-_@~#:\+&=\?])+)?'  # optional page or file
     )
@@ -61,7 +65,7 @@ def replace_hashtags(comments):
     regex = (
         '(^|(?<=\s))'  # start with SOF or ws
         '#[A-Za-z][A-Za-z0-9\!]+'  # hashtag
-        '((?=\s)|$)'  # end with EOF or ws
+        '(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
     )
     hashtags = comments['text'].str.replace(regex, 'HASHTAG')
     comments = comments.assign(text=hashtags)
@@ -78,7 +82,7 @@ def replace_emoticons(comments):
         '\<[\/\\]?3|'  # (broken) heart
         '[\(\)\\\D|\*\$][\-\^]?[\:\;\=]|'  # smileys
         '[\:\;\=B8x][\-\^]?[3DOPp\@\$\*\\\)\(\/\|]|'  # more smileys
-        '\^\^|xd)'  # ^^ or xd
+        '\^\^|xd|:(v){1,3}|:0)'  # ^^ or xd or :v or :0
         '(?=\s|[\!\.\?]|$)'  # end with EOF or ws
     )
     emoticons = comments['text'].str.replace(regex, 'EMOTICON')
@@ -110,7 +114,7 @@ def remove_dirt(comments):
     comments = comments[~comments['text'].str.match(tag_regex)]
 
     # remove comments with 3 or fewer characters
-    comments['textlen'] = comments['text'].str.len()
+    comments = comments.assign(textlen=comments['text'].str.len())
     comments = comments[comments['textlen'] >= 4]
 
     # remove comments with non-ASCII characters or not one lowercase character

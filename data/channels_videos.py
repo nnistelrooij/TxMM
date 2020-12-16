@@ -32,6 +32,7 @@ def channel_videos_df(videos_json):
         'published': pd.to_datetime(
             [v['snippet']['publishedAt'] for v in videos_json]),
         'title': [v['snippet']['title'] for v in videos_json],
+        'description': [v['snippet']['description'] for v in videos_json],
     }
 
     return pd.DataFrame(df)
