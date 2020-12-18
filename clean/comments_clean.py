@@ -35,18 +35,15 @@ def replace_diacritics_html_repeats(comments):
 
 
 def replace(comments, regex, repl, flags=0):
-    col = repl.lower()
-    comments[col] = 0
-    for i, comment in comments.iterrows():
-        text, count = re.subn(regex, repl, comment['text'], flags=flags)
-        comments.loc[i, 'text'], comments.loc[i, col] = text, count
+    textn = comments['text'].map(lambda c: re.subn(regex, repl, c, flags=flags))
+    comments[['text', repl.lower()]] = textn.apply(pd.Series)
 
 
 def replace_timecodes(comments):
     regex = (
         r'((@|~|#) ?)?'  # optional @, ~, or # at the start
         r'(([0-9](:|h))?[0-9]{1,2}(:|m)[0-9]{2}s?\s?-\s?)?'  # optional t range
-        r'([0-9](:|h))?[0-9]{1,2}(:|m)[0-9]{2}s?'  # time code with : or h m s
+        r'([0-9](:|h))?[0-9]{1,2}(:|m|\')[0-9]{2}(s|\'\')?'  # time code
         r'(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
     )
     replace(comments, regex, 'TIMECODE')
