@@ -88,9 +88,9 @@ def replace_emoticons(comments):
         r'(^|(?<=\s))'  # start with SOF or ws
         r'(:\w+:|'  # emojis, such as :smile:
         r'<[/\\]?3|'  # (broken) heart
-        r'[\(\)\\\D|\*\$][\-\^]?[:;\=]|'  # smileys
-        r'[:;\=B8x][\-\^]?[3DOPp@\$\*\\\)\(/\|]|'  # more smileys
-        r'\^\^|xd|:(v){1,3}|:0)'  # ^^ or xd or :v or :0
+        r'[\(\)\\|\*\$][\-\^]?[:;\=]|'  # smileys
+        r'[:;\=8x][\-\^]?[3DOPp@\$\*\\\)\(/\|]|'  # more smileys
+        r'\^\^|xd|XD|:(v){1,3}|:0|\-:\)|:9\))'  # ^^ or xd or :v or :0
         r'(?=\s|[\!\.\?]|$)'  # end with EOF or ws
     )
     replace(comments, regex, 'EMOTICON')
@@ -113,8 +113,14 @@ def remove_dirt(comments):
     tag_regex = '(\s*(TIMECODE|LINK|EMAIL|HASHTAG|EMOTICON|USERHANDLE))+\s*$'
     comments = comments[~comments['text'].str.match(tag_regex)]
 
-    # remove comments with 3 or fewer characters
+    # remove comments with too many replacements
+    tags = ['timecode', 'link', 'email', 'hashtag', 'emoticon', 'userhandle']
+    n_tags = comments[tags].sum(axis=1)
+    comments = comments[n_tags <= 5]
+
+    # remove comments with too few or too many characters
     comments = comments[comments['text'].str.len() >= 4]
+    comments = comments[comments['text'].str.len() <= 500]
 
     # remove comments with non-ASCII characters or not one lowercase character
     clean_regex = '[A-Za-z0-9/\?\.,;:\-\(\)&%\$\!"\' \n\t]+$'
