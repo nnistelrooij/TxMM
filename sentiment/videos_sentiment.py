@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import beta
 from tqdm import trange
 
 
@@ -16,6 +17,22 @@ def sentiment_prior_params(videos_df):
     # compute the a and b parameters of the beta prior distribution
     videos_df['a'] = like_proportions * feedback_weight + 1
     videos_df['b'] = dislike_proportions * feedback_weight + 1
+
+
+def sentiment_likelihood_params(videos_df, comments_df):
+    # for each video, add the number of comments and lambda exponents
+    for i, video in videos_df.iterrows():
+        # get the comments of the current video in comments_df
+        comments = comments_df[comments_df['video_id'] == video['video_id']]
+
+        # determine the actual number comments in the data
+        n_sentiments = comments.shape[0]
+        videos_df.loc[i, 'comments'] = n_sentiments
+
+        # use number and sum of sentiments to make likelihood lambda exponents
+        sentiments_sum = np.sum(comments['sentiment'])
+        videos_df.loc[i, 'a'] = sentiments_sum
+        videos_df.loc[i, 'b'] = n_sentiments - sentiments_sum
 
 
 def sentiment_joint_params(videos_df, comments_df):
@@ -41,22 +58,25 @@ def sentiment_proposal_params(videos_df):
         a_min=1.5, a_max=3.2,
     )
 
-    # change half_interval for videos with accept rate a lot smaller than 0.5
-    videos_df.loc[930, 'half_interval'] /= 18
-    videos_df.loc[530, 'half_interval'] /= 6
-    videos_df.loc[[1182, 1294, 1180, 526], 'half_interval'] /= 4
-    videos_df.loc[1293, 'half_interval'] /= 3.5
-    videos_df.loc[[1285, 1023, 1323], 'half_interval'] /= 2.7
-    videos_df.loc[[1171, 1159, 1160, 1227, 1115, 643], 'half_interval'] /= 1.7
-    videos_df.loc[[
-        77, 1286, 893, 1245, 575, 689, 1100, 1262, 1309, 32, 681, 1126, 1267,
-        1141, 564, 1277, 1280, 691, 1003, 1112, 70, 1186, 1241, 1162, 747,
-    ], 'half_interval'] /= 1.6
+    if videos_df.shape[0] > 1:
+        # change half_interval for videos with accept rate smaller than 0.33
+        videos_df.loc[930, 'half_interval'] /= 18
+        videos_df.loc[530, 'half_interval'] /= 6
+        videos_df.loc[[1182, 1294, 1180, 526], 'half_interval'] /= 4
+        videos_df.loc[1293, 'half_interval'] /= 3.5
+        videos_df.loc[[1285, 1023, 1323], 'half_interval'] /= 2.7
+        videos_df.loc[[
+            1171, 1159, 1160, 1227, 1115, 643
+        ], 'half_interval'] /= 1.7
+        videos_df.loc[[
+            32, 70, 1286, 564, 1309, 681, 689, 691, 747, 893, 1003, 1100, 1112,
+            1126, 1141, 1162, 1186, 1241, 1245, 1262, 1267, 1277, 1280, 77, 575,
+        ], 'half_interval'] /= 1.6
 
-    # change half_interval for videos with accept rate a lot bigger than 0.5
-    videos_df.loc[[
-        137, 909, 279, 925, 244, 381, 339, 366, 147, 963, 434, 1328, 806
-    ], 'half_interval'] *= 1.3
+        # change half_interval for videos with accept rate larger than 0.66
+        videos_df.loc[[
+            137, 909, 279, 925, 244, 381, 339, 366, 147, 963, 434, 1328, 806
+        ], 'half_interval'] *= 1.3
 
 
 def sentiment_params(videos_df, comments_df):
@@ -153,7 +173,7 @@ def videos_sentiment_distr(videos_df, comments_df, verbose=True, n_plots=5):
             plt.title(f'Posterior probability density of video {idx}')
             plt.xlabel('$\lambda$')
             plt.ylabel('Probability density')
-            plt.xlim(0, 1)
+            plt.xlim(-0.05, 1.05)
             plt.show()
 
     return samples
@@ -162,4 +182,78 @@ def videos_sentiment_distr(videos_df, comments_df, verbose=True, n_plots=5):
 if __name__ == '__main__':
     videos_df = pd.read_csv('../clean/clean_videos.csv')
     comments_df = pd.read_csv('sentiment_comments.csv')
-    videos_sentiment_distr(videos_df, comments_df)
+
+    # initialize the necessary variables for the distributions and figure
+    idx = 385
+    videos_df = videos_df.loc[[idx]]
+    lambdas = np.linspace(0.001, 0.999, 999)
+    fig, ax = plt.subplots(1, 3, figsize=(12, 3.5))
+
+    # show the prior sentiment distribution
+    sentiment_prior_params(videos_df)
+    video = videos_df.loc[idx]
+    prior_mean = video['a'] / (video['a'] + video['b'])
+    print('Prior mean:', prior_mean)
+    ax[0].plot(
+        lambdas,
+        beta.pdf(lambdas, video['a'], video['b']),
+        label=f'$\mathbb{{E}}[\lambda]={prior_mean:.3f}$',
+    )
+    ax[0].set_xlabel('$\lambda$')
+    ax[0].set_ylabel('Prior  Beta$(\lambda|a, b)$')
+    ax[0].axes.yaxis.set_ticks([])
+    ax[0].legend()
+
+    # show the likelihood sentiment distribution
+    sentiment_likelihood_params(videos_df, comments_df)
+    video = videos_df.loc[idx]
+    const = video['comments'] * np.log(cb_consts(lambdas))
+    ll = const + video['a'] * np.log(lambdas) + video['b'] * np.log(1 - lambdas)
+    likelihood_mean = np.sum(lambdas * np.exp(ll) / np.sum(np.exp(ll)))
+    print('Likelihood mean:', likelihood_mean)
+    ax[1].plot(
+        lambdas,
+        np.exp(ll),
+        label=f'$\mathbb{{E}}[\lambda]={likelihood_mean:.3f}$',
+    )
+    ax[1].set_xlabel('$\lambda$')
+    ax[1].set_ylabel('Likelihood  $p(\mathcal{D}|\lambda)$')
+    ax[1].axes.yaxis.set_ticks([])
+    ax[1].legend()
+
+    # show the posterior sentiment sample distribution
+    samples = videos_sentiment_distr(videos_df, comments_df, verbose=False)
+    posterior_mean = np.mean(samples[0])
+    print('Posterior mean:', posterior_mean)
+    n, _, _ = ax[2].hist(
+        samples[0],
+        bins=100,
+        label=f'$\mathbb{{E}}[\lambda]={posterior_mean:.3f}$',
+    )
+    ax[2].set_xlabel('$\lambda$')
+    ax[2].set_ylabel('Posterior  $p(\lambda|\mathcal{D}, a, b)$')
+    ax[2].set_xlim(-0.05, 1.05)
+    ax[2].set_ylim(bottom=-0.05 * max(n))
+    ax[2].axes.yaxis.set_ticks([])
+    ax[2].legend()
+
+    plt.tight_layout()
+    plt.savefig('inference.pdf')
+    plt.show()
+
+    videos_df = pd.read_csv('../clean/clean_videos.csv')
+    comments_df = pd.read_csv('sentiment_comments.csv')
+    samples = videos_sentiment_distr(videos_df, comments_df)
+
+    mean = np.mean(samples)
+    plt.hist(
+        np.mean(samples, axis=1),
+        bins=100,
+        label=f'$\mathbb{{E}}[\mathbb{{E}}[\lambda]]={mean:.3f}$',
+    )
+    plt.xlabel('$\mathbb{{E}}[\lambda]$')
+    plt.ylabel('Number of videos')
+    plt.xlim(-0.05, 1.05)
+    plt.legend()
+    plt.savefig('sentiment_means.pdf')
+    plt.show()

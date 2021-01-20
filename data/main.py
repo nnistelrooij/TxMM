@@ -11,7 +11,7 @@ from .videos_stats import videos_stats_df, videos_stats_query
 
 
 def main(api, channel_ids, published_after):
-    # get all videos since 2018
+    # get all videos since published_after
     videos_df = channels_videos_df(api, channel_ids, published_after)
 
     # add stats of videos

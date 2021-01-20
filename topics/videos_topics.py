@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 
 def videos_topics(videos, n_topics=100):
     # initialise the count vectorizer on unigrams and bigrams
-    count_vectorizer = CountVectorizer(ngram_range=(1, 2), max_df=0.25)
+    count_vectorizer = CountVectorizer(ngram_range=(1, 2), max_df=0.7)
 
     # fit and transform the cleaned and preprocessed video texts
     count_data = count_vectorizer.fit_transform(videos['text'])
