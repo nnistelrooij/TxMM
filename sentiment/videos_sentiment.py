@@ -6,7 +6,7 @@ from tqdm import trange
 
 
 def sentiment_prior_params(videos_df):
-    # compute the proportion of likes and dislikes for each video
+    # compute the proportion of likes and dislikes with add-1 smoothing
     n_feedback = videos_df['likes'] + videos_df['dislikes']
     like_proportions = (videos_df['likes'] + 1) / (n_feedback + 2)
     dislike_proportions = (videos_df['dislikes'] + 1) / (n_feedback + 2)
@@ -20,12 +20,12 @@ def sentiment_prior_params(videos_df):
 
 
 def sentiment_likelihood_params(videos_df, comments_df):
-    # for each video, add the number of comments and lambda exponents
+    # for each video, add the number of comments and likelihood lambda exponents
     for i, video in videos_df.iterrows():
         # get the comments of the current video in comments_df
         comments = comments_df[comments_df['video_id'] == video['video_id']]
 
-        # determine the actual number comments in the data
+        # determine the actual number of comments in the data
         n_sentiments = comments.shape[0]
         videos_df.loc[i, 'comments'] = n_sentiments
 
@@ -36,7 +36,7 @@ def sentiment_likelihood_params(videos_df, comments_df):
 
 
 def sentiment_joint_params(videos_df, comments_df):
-    # for each video, add the number of comments and lambda exponents
+    # for each video, add the number of comments and joint lambda exponents
     for i, video in videos_df.iterrows():
         # get the comments of the current video in comments_df
         comments = comments_df[comments_df['video_id'] == video['video_id']]
@@ -59,7 +59,7 @@ def sentiment_proposal_params(videos_df):
     )
 
     if videos_df.shape[0] > 1:
-        # change half_interval for videos with accept rate smaller than 0.33
+        # change half_interval for videos with accept rate smaller than 0.35
         videos_df.loc[930, 'half_interval'] /= 18
         videos_df.loc[530, 'half_interval'] /= 6
         videos_df.loc[[1182, 1294, 1180, 526], 'half_interval'] /= 4
@@ -73,7 +73,7 @@ def sentiment_proposal_params(videos_df):
             1126, 1141, 1162, 1186, 1241, 1245, 1262, 1267, 1277, 1280, 77, 575,
         ], 'half_interval'] /= 1.6
 
-        # change half_interval for videos with accept rate larger than 0.66
+        # change half_interval for videos with accept rate larger than 0.65
         videos_df.loc[[
             137, 909, 279, 925, 244, 381, 339, 366, 147, 963, 434, 1328, 806
         ], 'half_interval'] *= 1.3
@@ -91,7 +91,20 @@ def sentiment_params(videos_df, comments_df):
 
 
 def cb_consts(probs):
-    # fill array with continuous bernoulli constant for prob == 0.5
+    """
+    Computes the C(lambda) constants of the continuous Bernoulli distribution.
+
+    Parameters
+    ----------
+    probs : (n_videos,) np.ndarray
+        Array with a lambda parameter for each video.
+
+    Returns
+    ----------
+    consts : (n_videos,) np.ndarray
+        Array with continuous Bernoulli distribution constants for each video.
+    """
+    # fill array with continuous Bernoulli constant for prob == 0.5
     consts = np.full_like(probs, 2)
 
     # substitute default constant whenever prob != 0.5
@@ -102,6 +115,21 @@ def cb_consts(probs):
 
 
 def sentiment_log_joints(videos_df, probs):
+    """
+    Computes the log probability of the joint distribution p(lambda, D, a, b).
+
+    Parameters
+    ----------
+    videos_df : DataFrame
+        Pandas DataFrame that holds the number of comments and lambda exponents.
+    probs : (n_videos,) np.ndarray
+        Array with a lambda parameter for each video.
+
+    Returns
+    ----------
+    log_joint : (n_videos,) np.ndarray
+        Array with log probabilities of joint distribution for each video.
+    """
     log_cb_consts = videos_df['comments'] * np.log(cb_consts(probs))
     pos_probs = videos_df['a'] * np.log(probs)
     neg_probs = videos_df['b'] * np.log(1 - probs)
@@ -159,8 +187,9 @@ def videos_sentiment_distr(videos_df, comments_df, verbose=True, n_plots=5):
     samples, n_accepted = metropolis_hastings(videos_df)
 
     if verbose:
-        print('Few accepted videos:', np.argsort(n_accepted)[:10].to_numpy())
-        print('Many accepted videos:', np.argsort(n_accepted)[-10:].to_numpy())
+        accepted_idx = np.argsort(n_accepted)
+        print('Few accepted videos:', accepted_idx[:10].to_numpy())
+        print('Many accepted videos:', accepted_idx[-1:-11:-1].to_numpy())
 
         plt.hist(n_accepted, bins=100)
         plt.title('Acceptance rates during Metropolis-Hastings')

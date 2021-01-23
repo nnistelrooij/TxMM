@@ -6,7 +6,7 @@ import pandas as pd
 
 
 def get_sentiment(comments):
-    # write input to MAX sentiment classifier in input.txt
+    # write input to MAX Text Sentiment Classifier to input.txt
     if os.path.exists('input.txt'): os.remove('input.txt')
     with open('input.txt', 'a') as text_file:
         print('{ "text": [', file=text_file, end='')
@@ -14,7 +14,7 @@ def get_sentiment(comments):
             print(f' "{comment}",', file=text_file, end='')
         print(f' "{comments.iloc[-1]}" ] }}', file=text_file, end='')
 
-    # run MAX sentiment classifier on stored input.txt file
+    # run MAX Text Sentiment Classifier on stored input.txt file
     x = subprocess.Popen([
             'curl',
             '-X', 'POST',

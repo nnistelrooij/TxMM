@@ -4,6 +4,23 @@ from comments_clean import *
 
 
 def concatenate_title_description(videos):
+    """
+    The title and description are concatenated to make a video's text.
+
+    The title is repeated sqrt(|description| / |title|) times, to make it more
+    prevalent in the learned topic model, as it is assumed that the title gives
+    a better overview of the topic that is covered in the video.
+
+    Parameters
+    ----------
+    videos : DataFrame
+        Pandas DataFrame holding the titles and descriptions of videos.
+
+    Return
+    ----------
+    videos : DataFrame
+        Pandas DataFrame with the concatenations in the 'text' column.
+    """
     reps = np.sqrt(videos['description'].str.len() / videos['title'].str.len())
     reps = reps.clip(1, reps).astype(int)
 

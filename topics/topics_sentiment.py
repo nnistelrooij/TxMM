@@ -21,22 +21,27 @@ def topics_sentiment_distr(video_sentiment_distrs, topic_distrs, lambdas):
 
     Returns
     -------
-    sentiment_distrs : (n_topics, n_lambdas - 1) np.ndarray
+    topic_sentiment_distrs : (n_topics, n_lambdas - 1) np.ndarray
         Distribution of sentiment of each topic.
+    lambda_means : (n_lambdas - 1) np.ndarray
+        Mean of lambda in each consecutive interval.
     """
     # add topics dimension to video_sentiment_distrs
     video_sentiment_distrs = video_sentiment_distrs[:, np.newaxis]
 
-    topic_sentiment_distrs = np.empty((topic_distrs.shape[1], len(lambdas) - 1))
+    n_topics = topic_distrs.shape[1]
+    topic_sentiment_distrs = np.empty((n_topics, len(lambdas) - 1))
+    lambda_means = np.empty(len(lambdas) - 1)
     interval_iter = tqdm(list(zip(lambdas, lambdas[1:])), desc='Topic lambdas')
     for i, lambda_interval in enumerate(interval_iter):
         # posterior = p(left < sentiment <= right|video)
         lambda_left, lambda_right = lambda_interval
-        posterior = np.mean(
+        lambdas_in_range = (
             (lambda_left < video_sentiment_distrs) &
-            (video_sentiment_distrs <= lambda_right),
-            axis=-1,
+            (video_sentiment_distrs <= lambda_right)
         )
+        posterior = np.mean(lambdas_in_range, axis=-1)
+        lambda_means[i] = np.mean(video_sentiment_distrs[lambdas_in_range])
 
         # joint = p(left < sentiment <= right, topic), marginal = p(topic)
         joint = np.mean(posterior * topic_distrs, axis=0)
@@ -45,15 +50,33 @@ def topics_sentiment_distr(video_sentiment_distrs, topic_distrs, lambdas):
         # joint / marginal = p(left < sentiment <= right|topic)
         topic_sentiment_distrs[:, i] = joint / marginal
 
-    return topic_sentiment_distrs
+    return topic_sentiment_distrs, lambda_means
 
 
 def plot_example(
-    topic_distrs,
     video_sentiment_distrs,
     topic_sentiment_distrs,
+    topic_distrs,
     lambdas,
+    lambda_means,
 ):
+    """
+    Plot example of topic sentiment inference.
+
+    Parameters
+    ----------
+    video_sentiment_distrs : (n_videos, n_samples) np.ndarray
+        Posterior sample distribution of the sentiment of each video.
+    topic_sentiment_distrs : (n_topics, n_lambdas - 1) np.ndarray
+        Distribution of sentiment of each topic.
+    topic_distrs : (n_videos, n_topics) np.ndarray
+        Distribution of topics of each video.
+    lambdas : (n_lambdas,) np.ndarray
+        Consecutive intervals of lambda to compute distribution for.
+    lambda_means : (n_lambdas - 1) np.ndarray
+        Mean of lambda in each consecutive interval.
+    """
+    first_range_idx = np.argmin(np.isnan(lambda_means))
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     width = 1 / (len(lambdas) - 1)
     bins = lambdas[:-1] + width / 2
@@ -65,7 +88,10 @@ def plot_example(
 
     topic_ax = fig.add_subplot(gs[:, 2:])
     topic_distr = -np.sort(-topic_distrs[:, topic_idx])
-    topic_mean = np.sum(bins * topic_sentiment_distrs[topic_idx])
+    topic_mean = np.sum(
+        lambda_means[first_range_idx:] *
+        topic_sentiment_distrs[topic_idx, first_range_idx:]
+    )
     topic_ax.bar(
         bins,
         height=topic_sentiment_distrs[topic_idx],
@@ -125,14 +151,27 @@ def plot_example(
     plt.show()
 
 
-def plot_means(topic_sentiment_distrs, lambdas):
-    width = 1 / (len(lambdas) - 1)
-    bins = lambdas[:-1] + width / 2
+def plot_means(topic_sentiment_distrs, lambda_means):
+    """
+    Plot distribution of means of topic sentiment distributions.
 
+    Parameters
+    ----------
+    topic_sentiment_distrs : (n_topics, n_lambdas - 1) np.ndarray
+        Distribution of sentiment of each topic.
+    lambda_means : (n_lambdas - 1) np.ndarray
+        Mean of lambda in each consecutive interval.
+    """
     # show distribution of mean topic sentiments
-    mean = np.mean(np.sum(bins * topic_sentiment_distrs, axis=1))
+    first_range_idx = np.argmin(np.isnan(lambda_means))
+    topic_means = np.sum(
+        lambda_means[first_range_idx:] *
+        topic_sentiment_distrs[:, first_range_idx:],
+        axis=1,
+    )
+    mean = np.mean(topic_means)
     plt.hist(
-        np.sum(bins * topic_sentiment_distrs, axis=1),
+        topic_means,
         bins=19,
         label=f'$\mathbb{{E}}[\mathbb{{E}}[\lambda]]={mean:.3f}$',
     )
@@ -144,104 +183,134 @@ def plot_means(topic_sentiment_distrs, lambdas):
     plt.show()
 
 
-# Helper function
-def print_topics(lda, count_vectorizer, n_top_words=10):
-    words = count_vectorizer.get_feature_names()
-    topics = []
-    for i, topic in enumerate(lda.components_):
-        topic_words = [words[j] for j in topic.argsort()[:-n_top_words - 1:-1]]
-        topics.append(topic_words)
-
-    return np.array(topics)
-
-
 def print_table(
     videos_df,
-    lda,
+    lda_model,
     count_vectorizer,
+    topic_sentiment_distrs,
     topic_distrs,
-    sentiment_distrs,
-    lambdas,
+    lambda_means,
+    n_topics=10,
+    n_tokens=10,
 ):
-    width = 1 / (len(lambdas) - 1)
-    bins = lambdas[:-1] + width / 2
-    
-    topic_words = print_topics(lda, count_vectorizer, 10)
-    worst_idx = np.argsort(np.sum(bins * sentiment_distrs, axis=1))[:10]
-    best_idx = np.argsort(np.sum(bins * sentiment_distrs, axis=1))[-1:-11:-1]
-    wolla = np.argsort(topic_distrs, axis=0)
+    """Print a LaTeX table that shows the top n_topics best and worst topics.
+
+    Parameters
+    ----------
+    videos_df : DataFrame
+        Pandas DataFrame holding the video YouTube IDs.
+    lda_model : sklearn.decomposition.LatentDirichletAllocation
+        LDA topic model from the sklearn package.
+    count_vectorizer : sklearn.feature_extraction.text.CountVectorizer
+        Counts the term occurrences in the video texsts.
+    topic_sentiment_distrs : (n_topics, n_lambdas - 1) np.ndarray
+        Distribution of sentiment of each topic.
+    topic_distrs : (n_videos, n_topics) np.ndarray
+        Distribution of topics of each video.
+    lambda_means : (n_lambdas - 1) np.ndarray
+        Mean of lambda in each consecutive interval.
+    n_topics : int
+        Number of topics to print for one side of the table.
+    n_tokens : int
+        Number of tokens to print for each topic.
+    """
+    topic_distr_idx = np.argsort(-topic_distrs, axis=0)
+    topic_tokens = print_topics(
+        lda_model, count_vectorizer,
+        verbose=False, n_tokens=n_tokens
+    )
+
+    first_range_idx = np.argmin(np.isnan(lambda_means))
+    topic_means = np.sum(
+        lambda_means[first_range_idx:] *
+        topic_sentiment_distrs[:, first_range_idx:],
+        axis=1,
+    )
+    worst_idx = np.argsort(topic_means)[:n_topics]
+    best_idx = np.argsort(topic_means)[-1:-n_topics - 1:-1]
+
     format = (
         '\\href{{https://www.youtube.com/watch?v={}}}'
         '{{\\textcolor{{blue}}{{{}}}}}'
     )
     for best_idx, worst_idx in zip(best_idx, worst_idx):
-        print(f'    {np.sum(bins * sentiment_distrs[best_idx]):.3f}', end=' & ')
-        print(', '.join(topic_words[best_idx]), end=' & ')
+        print(f'    {topic_means[best_idx]:.3f}', end=' & ')
+        print(', '.join(topic_tokens[best_idx]), end=' & ')
         print(format.format(
-            videos_df.loc[wolla[-1, best_idx], 'video_id'],
-            topic_distrs[wolla[-1, best_idx], best_idx],
+            videos_df.loc[topic_distr_idx[0, best_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[0, best_idx], best_idx],
         ), end=' ')
         print(format.format(
-            videos_df.loc[wolla[-2, best_idx], 'video_id'],
-            topic_distrs[wolla[-2, best_idx], best_idx],
+            videos_df.loc[topic_distr_idx[1, best_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[1, best_idx], best_idx],
         ), end=' ')
         print(format.format(
-            videos_df.loc[wolla[-3, best_idx], 'video_id'],
-            topic_distrs[wolla[-3, best_idx], best_idx],
+            videos_df.loc[topic_distr_idx[2, best_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[2, best_idx], best_idx],
         ), end=' ')
         print(format.format(
-            videos_df.loc[wolla[-4, best_idx], 'video_id'],
-            topic_distrs[wolla[-4, best_idx], best_idx],
+            videos_df.loc[topic_distr_idx[3, best_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[3, best_idx], best_idx],
         ), end=' & ')
     
-        print(f'{np.sum(bins * sentiment_distrs[worst_idx]):.3f}', end=' & ')
-        print(', '.join(topic_words[worst_idx]), end=' & ')
+        print(f'{topic_means[worst_idx]:.3f}', end=' & ')
+        print(', '.join(topic_tokens[worst_idx]), end=' & ')
         print(format.format(
-            videos_df.loc[wolla[-1, worst_idx], 'video_id'],
-            topic_distrs[wolla[-1, worst_idx], worst_idx],
+            videos_df.loc[topic_distr_idx[0, worst_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[0, worst_idx], worst_idx],
         ), end=' ')
         print(format.format(
-            videos_df.loc[wolla[-2, worst_idx], 'video_id'],
-            topic_distrs[wolla[-2, worst_idx], worst_idx],
+            videos_df.loc[topic_distr_idx[1, worst_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[1, worst_idx], worst_idx],
         ), end=' ')
         print(format.format(
-            videos_df.loc[wolla[-3, worst_idx], 'video_id'],
-            topic_distrs[wolla[-3, worst_idx], worst_idx],
+            videos_df.loc[topic_distr_idx[2, worst_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[2, worst_idx], worst_idx],
         ), end=' ')
         print(format.format(
-            videos_df.loc[wolla[-4, worst_idx], 'video_id'],
-            topic_distrs[wolla[-4, worst_idx], worst_idx],
+            videos_df.loc[topic_distr_idx[3, worst_idx], 'video_id'],
+            topic_distrs[topic_distr_idx[3, worst_idx], worst_idx],
         ), end=' \\\\\n')
 
 
 if __name__ == '__main__':
+    # load cleaned data
     videos_df = pd.read_csv('../clean/clean_videos.csv')
     comments_df = pd.read_csv('../sentiment/sentiment_comments.csv')
 
+    # infer the sentiment of all the videos
     video_sentiment_distrs = videos_sentiment_distr(videos_df, comments_df)
 
-    n_topics = 100
-    lda, count_vectorizer = videos_topics(videos_df, n_topics)
-    topic_distrs = lda.transform(count_vectorizer.transform(videos_df['text']))
+    # learn an LDA topic model with 58 topics
+    n_topics = 58
+    lda_model, count_vectorizer, count_data = videos_topics(videos_df, n_topics)
+    topic_distrs = lda_model.transform(count_data)
 
+    # infer the sentiment of all the topics
     n_lambdas = 229
     lambdas = np.linspace(0, 1, n_lambdas)
-    topic_sentiment_distrs = topics_sentiment_distr(
+    topic_sentiment_distrs, lambda_means = topics_sentiment_distr(
         video_sentiment_distrs, topic_distrs, lambdas,
     )
 
+    # plot example of inference of a topic's sentiment
     plot_example(
-        topic_distrs,
         video_sentiment_distrs,
         topic_sentiment_distrs,
+        topic_distrs,
         lambdas,
+        lambda_means,
     )
-    plot_means(topic_sentiment_distrs, lambdas)
+
+    # plot distribution of sentiment means of topics
+    plot_means(topic_sentiment_distrs, lambda_means)
+
+    # print LaTeX table to show final list of topics ranked on mean sentiment
     print_table(
         videos_df,
-        lda,
+        lda_model,
         count_vectorizer,
-        topic_distrs,
         topic_sentiment_distrs,
-        lambdas,
+        topic_distrs,
+        lambda_means,
     )

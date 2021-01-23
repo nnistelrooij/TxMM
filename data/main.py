@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     api_service_name = 'youtube'
     api_version = 'v3'
-    DEVELOPER_KEY = 'AIzaSyD16H3VkGm0GTD07e5IgVD8oHLIuSEwXh8'
+    DEVELOPER_KEY = ''
 
     youtube = build(api_service_name, api_version, developerKey=DEVELOPER_KEY)
 

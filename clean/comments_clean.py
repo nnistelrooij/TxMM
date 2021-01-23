@@ -4,7 +4,7 @@ import pandas as pd
 
 
 def remove_replies_channel_comments(comments):
-    """Remove replies and comments made by channel itself."""
+    """Remove replies and comments made by channels themselves."""
     replies = comments['replies'] == -1
     self = comments['channel_id'] == comments['author_channel_id']
     comments = comments[~replies & ~self]
@@ -13,28 +13,44 @@ def remove_replies_channel_comments(comments):
 
 
 def replace_diacritics_html_repeats(comments):
-    # get texts from comments DataFrame
+    # get comment display texts from comments DataFrame
     text = comments['text']
 
-    # replace most common diacritics
+    # substitute most common letters with diacritics for just the letters
     text = text.str.replace('á', 'a')
     text = text.str.replace('É', 'E')
     text = text.str.replace('é', 'e')
     text = text.str.replace('ö', 'o')
 
-    # replace HTML character codes
+    # replace HTML character codes with characters
     text = text.str.replace('&amp;', '&')
     text = text.str.replace('&#39;', '\'')
     text = text.str.replace('&quot;', '"')
 
-    # replace long sequences of equal characters
+    # replace long sequences of equal characters with 3 of that character
     text = text.str.replace(r'(.|\s)\1{3,}', r'\1\1\1')
 
-    # put new texts in comments DataFrame
+    # put cleaned texts back in comments DataFrame
     comments.loc[:, 'text'] = text
 
 
 def replace(comments, regex, repl, key, flags=0):
+    """
+    Substitutes matches with regex for repl and stores how many times with key.
+
+    Parameters
+    ----------
+    comments : DataFrame
+        Pandas DataFrame holding the display text of comments.
+    regex : str
+        Regular expression whose matches in the comments will be substituted.
+    repl : str
+        The string that will replace the matched expression, may be empty.
+    key : str
+        Column in comments DataFrame that will store number of substitutions.
+    flags : int, optional
+        Flags for the regular expression function, e.g. re.IGNORECASE.
+    """
     textn = comments['text'].map(lambda c: re.subn(regex, repl, c, flags=flags))
     comments[['text', key]] = textn.apply(pd.Series)
 
