@@ -17,14 +17,6 @@ def videos_topics(videos, n_topics=100):
     return lda, count_vectorizer
 
 
-# Helper function
-def print_topics(lda, count_vectorizer, n_top_words=10):
-    words = count_vectorizer.get_feature_names()
-    for i, topic in enumerate(lda.components_):
-        topic_words = [words[j] for j in topic.argsort()[:-n_top_words - 1:-1]]
-        print(f'\nTopic #{i}\n' + ', '.join(topic_words))
-
-
 if __name__ == '__main__':
     videos = pd.read_csv('../clean/clean_videos.csv')
 

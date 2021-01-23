@@ -34,34 +34,34 @@ def replace_diacritics_html_repeats(comments):
     comments.loc[:, 'text'] = text
 
 
-def replace(comments, regex, repl, flags=0):
+def replace(comments, regex, repl, key, flags=0):
     textn = comments['text'].map(lambda c: re.subn(regex, repl, c, flags=flags))
-    comments[['text', repl.lower()]] = textn.apply(pd.Series)
+    comments[['text', key]] = textn.apply(pd.Series)
 
 
-def replace_timecodes(comments):
+def replace_timecodes(comments, repl=''):
     regex = (
         r'((@|~|#) ?)?'  # optional @, ~, or # at the start
         r'(([0-9](:|h))?[0-9]{1,2}(:|m)[0-9]{2}s?\s?-\s?)?'  # optional t range
         r'([0-9](:|h))?[0-9]{1,2}(:|m|\')[0-9]{2}(s|\'\')?'  # time code
         r'(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
     )
-    replace(comments, regex, 'TIMECODE')
+    replace(comments, regex, repl, 'timecode')
     print(f'We have replaced {sum(comments["timecode"])} time codes.')
 
 
-def replace_links(comments):
+def replace_links(comments, repl=''):
     regex = (
         r'(https?://|ftp://|https?://www\.|www\.)'  # starts with protocol
         r'([A-Za-z0-9\-]+\.){1,5}'  # website domain
         r'[a-z]{1,4}'  # top-level domain
         r'/?(([\./]?[A-za-z0-9/%<>\-_@~#:\+&\=\?])+)?'  # optional page or file
     )
-    replace(comments, regex, 'LINK')
+    replace(comments, regex, repl, 'link')
     print(f'We have replaced {sum(comments["link"])} links.')
 
 
-def replace_emails(comments):
+def replace_emails(comments, repl=''):
     regex = (
         r'(^|(?<=\s))'  # start with SOF or ws
         r'[A-Za-z0-9\-\.]+'  # user name
@@ -69,21 +69,21 @@ def replace_emails(comments):
         r'[a-z]{1,4}'  # top-level domain
         r'(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
     )
-    replace(comments, regex, 'EMAIL')
+    replace(comments, regex, repl, 'email')
     print(f'We have replaced {sum(comments["email"])} e-mails.')
 
 
-def replace_hashtags(comments):
+def replace_hashtags(comments, repl=''):
     regex = (
         r'(^|(?<=\s))'  # start with SOF or ws
         r'#[A-Za-z][A-Za-z0-9\!]+'  # hashtag
         r'(?=[:;\.,\?\!]?(\s|$))'  # optional punctuation, ends with ws or EOF
     )
-    replace(comments, regex, 'HASHTAG')
+    replace(comments, regex, repl, 'hashtag')
     print(f'We have replaced {sum(comments["hashtag"])} hashtags.')
 
 
-def replace_emoticons(comments):
+def replace_emoticons(comments, repl=''):
     regex = (
         r'(^|(?<=\s))'  # start with SOF or ws
         r'(:\w+:|'  # emojis, such as :smile:
@@ -93,18 +93,18 @@ def replace_emoticons(comments):
         r'\^\^|xd|XD|:(v){1,3}|:0|\-:\)|:9\))'  # ^^ or xd or :v or :0
         r'(?=\s|[\!\.\?]|$)'  # end with EOF or ws
     )
-    replace(comments, regex, 'EMOTICON')
+    replace(comments, regex, repl, 'emoticon')
     print(f'We have replaced {sum(comments["emoticon"])} emoticons.')
 
 
-def replace_userhandles(comments):
+def replace_userhandles(comments, repl=''):
     regex = (
         r'(^|(?<=\s))'  # start with BOF or ws
         r'@(bprp|Flammable Maths|Stand-up Maths|Standup Maths|PBS|'
         r'PBS Infinite Series|Think Twice|Tipping Point Math|3B1B|'
         r'[a-z0-9]{5,})'  # multitoken handle or generic handle
     )
-    replace(comments, regex, 'USERHANDLE', flags=re.IGNORECASE)
+    replace(comments, regex, repl, 'userhandle', flags=re.IGNORECASE)
     print(f'We have replaced {sum(comments["userhandle"])} user handles.')
 
 
@@ -138,12 +138,12 @@ if __name__ == '__main__':
     comments = pd.read_csv('../data/comments.csv')
     comments = remove_replies_channel_comments(comments)
     replace_diacritics_html_repeats(comments)
-    replace_timecodes(comments)
-    replace_links(comments)
-    replace_emails(comments)
-    replace_hashtags(comments)
-    replace_emoticons(comments)
-    replace_userhandles(comments)
+    replace_timecodes(comments, 'TIMECODE')
+    replace_links(comments, 'LINK')
+    replace_emails(comments, 'EMAIL')
+    replace_hashtags(comments, 'HASHTAG')
+    replace_emoticons(comments, 'EMOTICON')
+    replace_userhandles(comments, 'USERHANDLE')
     comments = remove_dirt(comments)
 
     print(f'Final number of comments: {comments.shape[0]}')

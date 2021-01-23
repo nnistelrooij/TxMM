@@ -179,10 +179,7 @@ def videos_sentiment_distr(videos_df, comments_df, verbose=True, n_plots=5):
     return samples
 
 
-if __name__ == '__main__':
-    videos_df = pd.read_csv('../clean/clean_videos.csv')
-    comments_df = pd.read_csv('sentiment_comments.csv')
-
+def plot_example(videos_df, comments_df):
     # initialize the necessary variables for the distributions and figure
     idx = 385
     videos_df = videos_df.loc[[idx]]
@@ -238,11 +235,11 @@ if __name__ == '__main__':
     ax[2].legend()
 
     plt.tight_layout()
-    plt.savefig('inference.pdf')
+    plt.savefig('video_inference.pdf')
     plt.show()
 
-    videos_df = pd.read_csv('../clean/clean_videos.csv')
-    comments_df = pd.read_csv('sentiment_comments.csv')
+
+def plot_means(videos_df, comments_df):
     samples = videos_sentiment_distr(videos_df, comments_df)
 
     mean = np.mean(samples)
@@ -255,5 +252,38 @@ if __name__ == '__main__':
     plt.ylabel('Number of videos')
     plt.xlim(-0.05, 1.05)
     plt.legend()
-    plt.savefig('sentiment_means.pdf')
+    plt.savefig('video_means.pdf')
     plt.show()
+
+    return samples
+
+
+def print_table(samples, n=10):
+    worst_idx = np.argsort(np.mean(samples, axis=1))[:n]
+    best_idx = np.argsort(np.mean(samples, axis=1))[-1:-n - 1:-1]
+
+    format = (
+        '\\href{{https://www.youtube.com/watch?v={}}}'
+        '{{\\textcolor{{blue}}{{{}}}}}'
+    )
+    for best_idx, worst_idx in zip(best_idx, worst_idx):
+        print('   ', f'{np.mean(samples[best_idx]):.3f}', end=' & ')
+        print(format.format(
+            videos_df.loc[best_idx, 'video_id'],
+            videos_df.loc[best_idx, 'title'],
+        ), end=' & ')
+
+        print(f'{np.mean(samples[worst_idx]):.3f}', end=' & ')
+        print(format.format(
+            videos_df.loc[worst_idx, 'video_id'],
+            videos_df.loc[worst_idx, 'title'],
+        ), end=' \\\\\n')
+
+
+if __name__ == '__main__':
+    videos_df = pd.read_csv('../clean/clean_videos.csv')
+    comments_df = pd.read_csv('sentiment_comments.csv')
+
+    plot_example(videos_df, comments_df)
+    samples = plot_means(videos_df, comments_df)
+    print_table(samples)
