@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
-from videos_topics import *
+from videos_topics import print_topics, videos_topics
 from sentiment.videos_sentiment import videos_sentiment_distr
 
 
@@ -127,7 +128,7 @@ def plot_example(
             video_sentiment_distrs[[video_idx]],
             np.ones_like(topic_distrs),
             lambdas,
-        )[topic_idx] * topic_distr[i] / np.sum(topic_distr)
+        )[0][topic_idx] * topic_distr[i] / np.sum(topic_distr)
         topic_ax.bar(
             bins,
             height=topic_sentiment_distr,
@@ -151,7 +152,7 @@ def plot_example(
     plt.show()
 
 
-def plot_means(topic_sentiment_distrs, lambda_means):
+def plot_means(topic_sentiment_distrs, lambda_means, n_bins=20):
     """
     Plot distribution of means of topic sentiment distributions.
 
@@ -161,6 +162,8 @@ def plot_means(topic_sentiment_distrs, lambda_means):
         Distribution of sentiment of each topic.
     lambda_means : (n_lambdas - 1) np.ndarray
         Mean of lambda in each consecutive interval.
+    n_bins : int
+        Number of bins for the histogram.
     """
     # show distribution of mean topic sentiments
     first_range_idx = np.argmin(np.isnan(lambda_means))
@@ -172,7 +175,7 @@ def plot_means(topic_sentiment_distrs, lambda_means):
     mean = np.mean(topic_means)
     plt.hist(
         topic_means,
-        bins=19,
+        bins=n_bins,
         label=f'$\mathbb{{E}}[\mathbb{{E}}[\lambda]]={mean:.3f}$',
     )
     plt.xlabel('$\mathbb{{E}}[\lambda]$')
@@ -231,7 +234,7 @@ def print_table(
 
     format = (
         '\\href{{https://www.youtube.com/watch?v={}}}'
-        '{{\\textcolor{{blue}}{{{}}}}}'
+        '{{\\textcolor{{blue}}{{{:.3f}}}}}'
     )
     for best_idx, worst_idx in zip(best_idx, worst_idx):
         print(f'    {topic_means[best_idx]:.3f}', end=' & ')
