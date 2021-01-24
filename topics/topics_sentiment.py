@@ -238,7 +238,7 @@ def print_table(
     )
     for best_idx, worst_idx in zip(best_idx, worst_idx):
         print(f'    {topic_means[best_idx]:.3f}', end=' & ')
-        print(', '.join(topic_tokens[best_idx]), end=' & ')
+        print(', '.join(topic_tokens[best_idx]) + ', ...', end=' & ')
         print(format.format(
             videos_df.loc[topic_distr_idx[0, best_idx], 'video_id'],
             topic_distrs[topic_distr_idx[0, best_idx], best_idx],
@@ -257,7 +257,7 @@ def print_table(
         ), end=' & ')
     
         print(f'{topic_means[worst_idx]:.3f}', end=' & ')
-        print(', '.join(topic_tokens[worst_idx]), end=' & ')
+        print(', '.join(topic_tokens[worst_idx]) + ', ...', end=' & ')
         print(format.format(
             videos_df.loc[topic_distr_idx[0, worst_idx], 'video_id'],
             topic_distrs[topic_distr_idx[0, worst_idx], worst_idx],
